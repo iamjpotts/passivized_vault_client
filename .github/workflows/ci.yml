@@ -1,0 +1,101 @@
+name: ci
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  deny:
+    name: Cargo deny
+    strategy:
+      matrix:
+        os:
+          - macOS-latest
+          - ubuntu-20.04
+          - windows-2022
+        toolchain:
+          - stable
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      # Install is very slow (5 min on Ubuntu, 10 minutes on Mac and Windows)
+      - run: cargo install cargo-deny
+      - run: cargo deny check
+
+  test-mac:
+    # Mac-based run takes about 25 minutes end-to-end.
+    name: Cargo test on Mac
+    strategy:
+      matrix:
+        os:
+          - macOS-latest
+        toolchain:
+          - 1.64
+          - stable
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          components: clippy
+          toolchain: ${{ matrix.toolchain }}
+      # Docker is not installed by default on Mac runners. Installing Docker takes about 10 minutes.
+      - uses: docker-practice/actions-setup-docker@master
+      - run: docker version
+      - run: cargo clippy
+      - run: cargo test --no-run
+      - run: cargo test --no-fail-fast
+  test-nix:
+    # Ubuntu-based run takes about 8 minutes end-to-end.
+    name: Cargo test on nix
+    strategy:
+      matrix:
+        os:
+          - ubuntu-20.04
+        toolchain:
+          - 1.64
+          - beta
+          - nightly
+          - stable
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          components: clippy
+          toolchain: ${{ matrix.toolchain }}
+      - run: docker version
+      - run: cargo clippy
+      - run: cargo test --no-run
+      - run: cargo test --no-fail-fast
+
+  test-windows:
+    name: Cargo test on Windows
+    strategy:
+      matrix:
+        os:
+          - windows-2022
+        toolchain:
+          - 1.64
+          - stable
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+      # See https://docs.rs/crate/openssl-sys/0.9.36
+      - run: vcpkg install openssl:x64-windows-static-md
+      - run: vcpkg integrate install
+      - run: docker version
+      - run: Stop-Service docker
+      - run: |
+          Set-Content -Path "C:\ProgramData\Docker\config\daemon.json" -Value "{`"hosts`": [`"tcp://127.0.0.1:2375`"]}"
+      - run: Start-Service docker
+      - run: cargo test --no-run
+      - run: |
+          $env:DOCKER_HOST = 'http://localhost:2375'; cargo test --no-fail-fast

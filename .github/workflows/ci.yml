@@ -22,12 +22,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.toolchain }}
-      # Install is very slow (5 min on Ubuntu, 10 minutes on Mac and Windows)
       - run: cargo install cargo-deny
       - run: cargo deny check
+    timeout-minutes: 30
 
   test-mac:
-    # Mac-based run takes about 25 minutes end-to-end.
     name: Cargo test on Mac
     strategy:
       matrix:
@@ -43,14 +42,12 @@ jobs:
         with:
           components: clippy
           toolchain: ${{ matrix.toolchain }}
-      # Docker is not installed by default on Mac runners. Installing Docker takes about 10 minutes.
-      - uses: docker-practice/actions-setup-docker@master
-      - run: docker version
       - run: cargo clippy
       - run: cargo test --no-run
       - run: cargo test --no-fail-fast
+    timeout-minutes: 45
+
   test-nix:
-    # Ubuntu-based run takes about 8 minutes end-to-end.
     name: Cargo test on nix
     strategy:
       matrix:
@@ -72,6 +69,7 @@ jobs:
       - run: cargo clippy
       - run: cargo test --no-run
       - run: cargo test --no-fail-fast
+    timeout-minutes: 30
 
   test-windows:
     name: Cargo test on Windows
@@ -91,11 +89,6 @@ jobs:
       # See https://docs.rs/crate/openssl-sys/0.9.36
       - run: vcpkg install openssl:x64-windows-static-md
       - run: vcpkg integrate install
-      - run: docker version
-      - run: Stop-Service docker
-      - run: |
-          Set-Content -Path "C:\ProgramData\Docker\config\daemon.json" -Value "{`"hosts`": [`"tcp://127.0.0.1:2375`"]}"
-      - run: Start-Service docker
       - run: cargo test --no-run
-      - run: |
-          $env:DOCKER_HOST = 'http://localhost:2375'; cargo test --no-fail-fast
+      - run: cargo test --no-fail-fast
+    timeout-minutes: 45

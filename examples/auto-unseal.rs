@@ -38,6 +38,8 @@ use passivized_docker_engine_client::model::MountMode::ReadOnly;
 use passivized_docker_engine_client::requests::{CreateContainerRequest, HostConfig};
 use passivized_docker_engine_client::responses::CreateContainerResponse;
 use passivized_test_support::env;
+use passivized_test_support::http_status_tests::is_success;
+use passivized_test_support::waiter::wait_for_http_server;
 use passivized_vault_client::client::{VaultApi, VaultApiUrl};
 use passivized_vault_client::errors::VaultClientError;
 use passivized_vault_client::models::{VaultEnableSecretsEngineRequest, VaultInitRequest, VaultUnsealRequest};
@@ -45,7 +47,6 @@ use tempfile::NamedTempFile;
 
 use example_utils::errors::ExampleError;
 use example_utils::timestamps;
-use example_utils::retrying::wait_for_http_server;
 
 #[cfg(not(windows))]
 use std::os::unix::fs::PermissionsExt;
@@ -248,7 +249,8 @@ async fn wait_for_vault(docker: &DockerEngineClient, what: &str, vault: &CreateC
     let inspected = docker.container(&vault.id).inspect()
         .await?;
 
-    let ip = example_utils::docker::extract_ip_address(&inspected)?;
+    let ip = inspected.first_ip_address()
+        .ok_or(ExampleError::Message(format!("Missing IP address for {}", what)))?;
 
     let wait = Duration::from_secs(2);
 
@@ -258,7 +260,7 @@ async fn wait_for_vault(docker: &DockerEngineClient, what: &str, vault: &CreateC
 
     let api_url = VaultApiUrl::new(format!("http://{}:8200", ip));
 
-    wait_for_http_server(&api_url.status())
+    wait_for_http_server(api_url.status(), is_success())
         .await?;
 
     Ok(api_url)

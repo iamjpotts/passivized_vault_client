@@ -14,6 +14,8 @@ use log::*;
 use passivized_docker_engine_client::DockerEngineClient;
 use passivized_docker_engine_client::model::MountMode::ReadOnly;
 use passivized_docker_engine_client::requests::{CreateContainerRequest, HostConfig};
+use passivized_test_support::http_status_tests::is_success;
+use passivized_test_support::waiter::wait_for_http_server;
 use passivized_vault_client::client::{VaultApi, VaultApiUrl};
 use passivized_vault_client::errors::VaultClientError;
 use passivized_vault_client::models::{VaultInitRequest, VaultUnsealRequest, VaultUnsealProgress};
@@ -90,7 +92,7 @@ async fn test_start_and_get_status() {
         .await
         .unwrap();
 
-    let ip = example_utils::docker::extract_ip_address(&inspected)
+    let ip = inspected.first_ip_address()
         .unwrap();
 
     info!("Selected IP address: {}", ip);
@@ -102,7 +104,7 @@ async fn test_start_and_get_status() {
 
     let api_url = VaultApiUrl::new(format!("http://{}:8200", ip));
 
-    example_utils::retrying::wait_for_http_server(&api_url.status())
+    wait_for_http_server(api_url.status(), is_success())
         .await
         .unwrap();
 

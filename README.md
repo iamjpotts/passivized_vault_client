@@ -14,6 +14,14 @@ A client library for working with [Vault](https://www.vaultproject.io/) through 
 ### Monitoring
   * Getting status
 
+### Username/Password Authentication
+
+* Create user and get details
+* Update passwords
+* List users
+* Login (validate password and get Vault token)
+* Delete
+
 ## Limitations
 
 See the warning on [REST api](https://www.vaultproject.io/api-docs):

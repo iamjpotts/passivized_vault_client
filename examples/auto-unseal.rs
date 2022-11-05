@@ -23,26 +23,20 @@
 #[path = "example_utils/lib.rs"]
 mod example_utils;
 
-use std::cmp::min;
-use std::{fs, io};
-use std::fs::File;
-use std::iter::zip;
-use std::io::Write;
-use std::path::Path;
 use std::process::ExitCode;
-use std::time::Duration;
 
 use log::*;
 use passivized_docker_engine_client::DockerEngineClient;
 use passivized_docker_engine_client::model::MountMode::ReadOnly;
 use passivized_docker_engine_client::requests::{CreateContainerRequest, HostConfig};
 use passivized_docker_engine_client::responses::CreateContainerResponse;
-use passivized_test_support::env;
 use passivized_test_support::http_status_tests::is_success;
 use passivized_test_support::waiter::wait_for_http_server;
 use passivized_vault_client::client::{VaultApi, VaultApiUrl};
 use passivized_vault_client::errors::VaultClientError;
 use passivized_vault_client::models::{VaultEnableSecretsEngineRequest, VaultInitRequest, VaultUnsealRequest};
+
+#[cfg(not(windows))]
 use tempfile::NamedTempFile;
 
 use example_utils::errors::ExampleError;
@@ -50,28 +44,15 @@ use example_utils::images;
 use example_utils::timestamps;
 
 #[cfg(not(windows))]
-use std::os::unix::fs::PermissionsExt;
+const TRANSIT_MOUNT_TYPE: &str = "transit";
 
 #[cfg(not(windows))]
-use passivized_test_support::cli;
-
-const TRANSIT_MOUNT_TYPE: &str = "transit";
 const TRANSIT_ENGINE_MOUNT_PATH: &str = "transit";
+
+#[cfg(not(windows))]
 const TRANSIT_SEAL_KEY: &str = "unseal";
 
-const VAULT_CONFIG_PATH: &str = "/vault/config/config.hcl";
-
-const VAULT_CONFIG_HCL: &str = "storage \"file\" {
-    path    = \"/vault/file\"
-}
-
-listener \"tcp\" {
-   address = \"0.0.0.0:8200\"
-   tls_disable = true
-}
-
-ui = false";
-
+#[cfg(not(windows))]
 fn build_vault2_config_hcl(vault1_url: &VaultApiUrl) -> String {
     format!("storage \"file\" {{
     path    = \"/vault/file\"
@@ -98,12 +79,16 @@ ui = false",
     TRANSIT_ENGINE_MOUNT_PATH)
 }
 
+#[cfg(not(windows))]
 struct RecoveryKeyConfig {
     public_key_file_names: Vec<String>,
     recovery_key_folder: String,
 }
 
+#[cfg(not(windows))]
 fn get_recovery_key_config() -> Result<Option<RecoveryKeyConfig>, String> {
+    use passivized_test_support::env;
+
     let mut public_key_file_names: Vec<String> = Vec::new();
 
     for result in (0..).map(|i| env::var(format!("RECOVERY_PUBLIC_KEY_FILE_{}", i))) {
@@ -130,49 +115,32 @@ fn get_recovery_key_config() -> Result<Option<RecoveryKeyConfig>, String> {
 
 #[cfg(windows)]
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), ExitCode> {
     // Due to cargo's requirement that every example have a main(), we cannot simply
     // conditional compile away this entire file.
 
     eprintln!("Running the Vault server on Windows is not supported by Hashicorp.");
+    Err(ExitCode::FAILURE)
 }
 
 #[cfg(not(windows))]
 #[tokio::main]
 async fn main() -> ExitCode {
-    cli::run(run).await
-}
-
-fn create_vault1_config_file() -> Result<NamedTempFile, io::Error> {
-    let mut ntf = NamedTempFile::new()?;
-    write!(ntf, "{}", VAULT_CONFIG_HCL)?;
-
-    #[cfg(not(windows))]
-    set_vault_config_permissions(ntf.path())?;
-
-    Ok(ntf)
-}
-
-fn create_vault2_config_file(vault1_url: &VaultApiUrl) -> Result<NamedTempFile, io::Error> {
-    let vault2_config = build_vault2_config_hcl(&vault1_url);
-
-    let mut ntf = NamedTempFile::new()?;
-    write!(ntf, "{}", vault2_config)?;
-
-    #[cfg(not(windows))]
-    set_vault_config_permissions(ntf.path())?;
-
-    Ok(ntf)
+    passivized_test_support::cli::run(run).await
 }
 
 #[cfg(not(windows))]
-fn set_vault_config_permissions(path: &Path) -> Result<(), io::Error> {
-    let f = File::open(path)?;
-    f.set_permissions(PermissionsExt::from_mode(0o644))
+fn create_vault2_config_file(vault1_url: &VaultApiUrl) -> Result<NamedTempFile, std::io::Error> {
+    use example_utils::hcl::create_vault_config_file_with_content;
+
+    create_vault_config_file_with_content(build_vault2_config_hcl(&vault1_url))
 }
 
+#[cfg(not(windows))]
 async fn create_and_start_vault1(docker: &DockerEngineClient) -> Result<CreateContainerResponse, ExampleError> {
-    let config_hcl: NamedTempFile = create_vault1_config_file()?;
+    use example_utils::hcl::{VAULT_CONFIG_PATH, create_vault_config_file};
+
+    let config_hcl: NamedTempFile = create_vault_config_file()?;
 
     let hcl_file = config_hcl.path()
         .to_str()
@@ -208,7 +176,10 @@ async fn create_and_start_vault1(docker: &DockerEngineClient) -> Result<CreateCo
     Ok(container)
 }
 
+#[cfg(not(windows))]
 async fn create_and_start_vault2(docker: &DockerEngineClient, vault1_url: &VaultApiUrl, vault1_root_token: &str) -> Result<CreateContainerResponse, ExampleError> {
+    use example_utils::hcl::VAULT_CONFIG_PATH;
+
     let config_hcl: NamedTempFile = create_vault2_config_file(vault1_url)?;
 
     let hcl_file = config_hcl.path()
@@ -246,18 +217,13 @@ async fn create_and_start_vault2(docker: &DockerEngineClient, vault1_url: &Vault
     Ok(container)
 }
 
+#[cfg(not(windows))]
 async fn wait_for_vault(docker: &DockerEngineClient, what: &str, vault: &CreateContainerResponse) -> Result<VaultApiUrl, ExampleError> {
     let inspected = docker.container(&vault.id).inspect()
         .await?;
 
     let ip = inspected.first_ip_address()
         .ok_or(ExampleError::Message(format!("Missing IP address for {}", what)))?;
-
-    let wait = Duration::from_secs(2);
-
-    info!("Waiting {} seconds for {} to start", wait.as_secs(), what);
-    tokio::time::sleep(wait)
-        .await;
 
     let api_url = VaultApiUrl::new(format!("http://{}:8200", ip));
 
@@ -267,6 +233,7 @@ async fn wait_for_vault(docker: &DockerEngineClient, what: &str, vault: &CreateC
     Ok(api_url)
 }
 
+#[cfg(not(windows))]
 async fn run() -> Result<(), ExampleError> {
     let recovery_key_config = get_recovery_key_config()
         .map_err(ExampleError::Message)?;
@@ -302,6 +269,7 @@ async fn run() -> Result<(), ExampleError> {
     Ok(())
 }
 
+#[cfg(not(windows))]
 async fn init_vault1(url: &VaultApiUrl) -> Result<String, VaultClientError> {
     info!("Running with Vault 1 at {}", url);
 
@@ -362,7 +330,13 @@ async fn init_vault1(url: &VaultApiUrl) -> Result<String, VaultClientError> {
     Ok(unseal_init_response.root_token)
 }
 
+#[cfg(not(windows))]
 async fn init_vault2(url: &VaultApiUrl, recovery_key_config: &Option<RecoveryKeyConfig>) -> Result<String, ExampleError> {
+    use std::cmp::min;
+    use std::fs;
+    use std::iter::zip;
+    use std::path::Path;
+
     let vault = VaultApi::new(url.clone());
 
     let request = match recovery_key_config {

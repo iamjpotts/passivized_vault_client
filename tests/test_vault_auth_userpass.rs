@@ -4,11 +4,6 @@
 #[path = "../examples/example_utils/lib.rs"]
 mod example_utils;
 
-use std::fs::File;
-use std::io;
-use std::io::Write;
-use std::os::unix::fs::PermissionsExt;
-
 use log::*;
 use passivized_docker_engine_client::DockerEngineClient;
 use passivized_docker_engine_client::model::MountMode::ReadOnly;
@@ -20,21 +15,9 @@ use passivized_vault_client::errors::VaultClientError;
 use passivized_vault_client::models::{VaultInitRequest, VaultUnsealRequest, VaultUnsealProgress, VaultEnableAuthRequest, VaultAuthUserpassCreateRequest};
 use tempfile::NamedTempFile;
 
+use example_utils::hcl::{VAULT_CONFIG_PATH, create_vault_config_file};
 use example_utils::images;
 use example_utils::timestamps;
-
-const VAULT_CONFIG_PATH: &str = "/vault/config/config.hcl";
-
-const VAULT_CONFIG_HCL: &str = "storage \"file\" {
-    path    = \"/vault/file\"
-}
-
-listener \"tcp\" {
-   address = \"0.0.0.0:8200\"
-   tls_disable = true
-}
-
-ui = false";
 
 #[tokio::test]
 async fn test_create_and_read_users() {
@@ -104,16 +87,6 @@ async fn test_create_and_read_users() {
     docker.container(&container.id).stop()
         .await
         .unwrap();
-}
-
-fn create_vault_config_file() -> Result<NamedTempFile, io::Error> {
-    let mut ntf = NamedTempFile::new()?;
-    write!(ntf, "{}", VAULT_CONFIG_HCL)?;
-
-    let f = File::open(ntf.path())?;
-    f.set_permissions(PermissionsExt::from_mode(0o644))?;
-
-    Ok(ntf)
 }
 
 async fn init_and_unseal(url: VaultApiUrl) -> Result<String, VaultClientError> {

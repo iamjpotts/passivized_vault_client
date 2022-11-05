@@ -11,27 +11,27 @@ mod example_utils;
 
 use std::process::ExitCode;
 
+#[cfg(not(windows))]
 use log::*;
-use passivized_docker_engine_client::DockerEngineClient;
-use passivized_docker_engine_client::model::MountMode::ReadOnly;
-use passivized_docker_engine_client::requests::{CreateContainerRequest, HostConfig};
-use passivized_docker_engine_client::responses::CreateContainerResponse;
-use passivized_test_support::http_status_tests::is_success;
-use passivized_test_support::waiter::wait_for_http_server;
+
+#[cfg(not(windows))]
 use passivized_vault_client::client::{VaultApi, VaultApiUrl};
+
+#[cfg(not(windows))]
 use passivized_vault_client::errors::VaultClientError;
+
+#[cfg(not(windows))]
 use passivized_vault_client::models::{VaultAuthUserpassCreateRequest, VaultEnableAuthRequest, VaultInitRequest, VaultUnsealRequest};
-use tempfile::NamedTempFile;
 
+#[cfg(not(windows))]
 use example_utils::errors::ExampleError;
-use example_utils::images;
-use example_utils::timestamps;
-
 
 // Name of a Vault plugin
+#[cfg(not(windows))]
 const USERPASS_MOUNT_TYPE: &str = "userpass";
 
 // Arbitrary name
+#[cfg(not(windows))]
 const USERPASS_MOUNT_PATH: &str = "guests";
 
 #[cfg(windows)]
@@ -51,75 +51,19 @@ async fn main() -> ExitCode {
 }
 
 #[cfg(not(windows))]
-async fn create_and_start_vault(docker: &DockerEngineClient) -> Result<CreateContainerResponse, ExampleError> {
-    use crate::example_utils::hcl::{VAULT_CONFIG_PATH, create_vault_config_file};
-
-    let config_hcl: NamedTempFile = create_vault_config_file()?;
-
-    let hcl_file = config_hcl.path()
-        .to_str()
-        .ok_or(ExampleError::Message("Could not get config temp file path".into()))?;
-
-    let create = CreateContainerRequest::default()
-        .name(timestamps::named("auth-userpass"))
-        .image(images::vault::IMAGE)
-        .cmd(vec!["server"])
-        .host_config(HostConfig::default()
-            .auto_remove()
-            .cap_add("IPC_LOCK")
-            .mount(hcl_file, VAULT_CONFIG_PATH, ReadOnly)
-        );
-
-    info!("Creating container");
-
-    let container = docker.containers().create(create)
-        .await?;
-
-    info!("Created container with id {}", &container.id);
-
-    info!("Starting Vault");
-
-    docker.container(&container.id).start()
-        .await?;
-
-    Ok(container)
-}
-
-#[cfg(not(windows))]
-async fn wait_for_vault(docker: &DockerEngineClient, what: &str, vault: &CreateContainerResponse) -> Result<VaultApiUrl, ExampleError> {
-    let inspected = docker.container(&vault.id).inspect()
-        .await?;
-
-    let ip = inspected.first_ip_address()
-        .ok_or(ExampleError::Message(format!("Missing IP address for {}", what)))?;
-
-    let api_url = VaultApiUrl::new(format!("http://{}:8200", ip));
-
-    wait_for_http_server(api_url.status(), is_success())
-        .await?;
-
-    Ok(api_url)
-}
-
-#[cfg(not(windows))]
 async fn run() -> Result<(), ExampleError> {
-    let docker = DockerEngineClient::new()?;
+    use example_utils::container::VaultContainer;
 
-    let vault = create_and_start_vault(&docker)
+    let vc = VaultContainer::new("auth-userpass")
         .await?;
 
-    let vault_url = wait_for_vault(&docker, "Vault", &vault)
+    let root_token = init_vault(&vc.url)
         .await?;
 
-    let root_token = init_vault(&vault_url)
+    demo_userpass(&VaultApi::new(vc.url.clone()), &root_token)
         .await?;
 
-    demo_userpass(&VaultApi::new(vault_url), &root_token)
-        .await?;
-
-    info!("Stopping container {}", &vault.id);
-
-    docker.container(&vault.id).stop()
+    vc.teardown()
         .await?;
 
     Ok(())

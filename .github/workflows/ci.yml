@@ -56,7 +56,6 @@ jobs:
         toolchain:
           - 1.64
           - beta
-          - nightly
           - stable
     runs-on: ${{ matrix.os }}
     steps:
@@ -69,6 +68,8 @@ jobs:
       - run: cargo clippy
       - run: cargo test --no-run
       - run: cargo test --no-fail-fast
+      - run: cargo run --example auth-userpass
+      - run: cargo run --example auto-unseal
     timeout-minutes: 30
 
   test-windows:

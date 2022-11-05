@@ -25,23 +25,23 @@ mod example_utils;
 
 use std::process::ExitCode;
 
+#[cfg(not(windows))]
 use log::*;
-use passivized_docker_engine_client::DockerEngineClient;
-use passivized_docker_engine_client::model::MountMode::ReadOnly;
-use passivized_docker_engine_client::requests::{CreateContainerRequest, HostConfig};
-use passivized_docker_engine_client::responses::CreateContainerResponse;
-use passivized_test_support::http_status_tests::is_success;
-use passivized_test_support::waiter::wait_for_http_server;
+
+#[cfg(not(windows))]
 use passivized_vault_client::client::{VaultApi, VaultApiUrl};
+
+#[cfg(not(windows))]
 use passivized_vault_client::errors::VaultClientError;
+
+#[cfg(not(windows))]
 use passivized_vault_client::models::{VaultEnableSecretsEngineRequest, VaultInitRequest, VaultUnsealRequest};
 
 #[cfg(not(windows))]
-use tempfile::NamedTempFile;
+use example_utils::container::VaultContainer;
 
+#[cfg(not(windows))]
 use example_utils::errors::ExampleError;
-use example_utils::images;
-use example_utils::timestamps;
 
 #[cfg(not(windows))]
 const TRANSIT_MOUNT_TYPE: &str = "transit";
@@ -130,107 +130,25 @@ async fn main() -> ExitCode {
 }
 
 #[cfg(not(windows))]
-fn create_vault2_config_file(vault1_url: &VaultApiUrl) -> Result<NamedTempFile, std::io::Error> {
-    use example_utils::hcl::create_vault_config_file_with_content;
+async fn create_and_start_vault1() -> Result<VaultContainer, ExampleError> {
+    use example_utils::timestamps;
 
-    create_vault_config_file_with_content(build_vault2_config_hcl(&vault1_url))
+    VaultContainer::new(&timestamps::named("auto-unseal-vault1"))
+        .await
 }
 
 #[cfg(not(windows))]
-async fn create_and_start_vault1(docker: &DockerEngineClient) -> Result<CreateContainerResponse, ExampleError> {
-    use example_utils::hcl::{VAULT_CONFIG_PATH, create_vault_config_file};
+async fn create_and_start_vault2(vault1_url: &VaultApiUrl, vault1_root_token: &str) -> Result<VaultContainer, ExampleError> {
+    use example_utils::timestamps;
 
-    let config_hcl: NamedTempFile = create_vault_config_file()?;
+    let hcl = build_vault2_config_hcl(&vault1_url);
 
-    let hcl_file = config_hcl.path()
-        .to_str()
-        .ok_or(ExampleError::Message("Could not get config temp file path".into()))?;
-
-    info!("HCL config file: {}", hcl_file);
-
-    let create = CreateContainerRequest::default()
-        .name(timestamps::named("auto-unseal-vault1"))
-        .image(images::vault::IMAGE)
-        .cmd(vec!["server"])
-        .host_config(HostConfig::default()
-            .auto_remove()
-            .cap_add("IPC_LOCK")
-            .mount(hcl_file, VAULT_CONFIG_PATH, ReadOnly)
-        );
-
-    info!("Creating container");
-
-    let container = docker.containers().create(create)
-        .await?;
-
-    info!("Created container with id {}", &container.id);
-    for w in &container.warnings {
-        warn!("Container warning: {}", w)
-    }
-
-    info!("Starting Vault 1");
-
-    docker.container(&container.id).start()
-        .await?;
-
-    Ok(container)
-}
-
-#[cfg(not(windows))]
-async fn create_and_start_vault2(docker: &DockerEngineClient, vault1_url: &VaultApiUrl, vault1_root_token: &str) -> Result<CreateContainerResponse, ExampleError> {
-    use example_utils::hcl::VAULT_CONFIG_PATH;
-
-    let config_hcl: NamedTempFile = create_vault2_config_file(vault1_url)?;
-
-    let hcl_file = config_hcl.path()
-        .to_str()
-        .ok_or(ExampleError::Message("Could not get config temp file path".into()))?;
-
-    info!("HCL config file 2: {}", hcl_file);
-
-    let create = CreateContainerRequest::default()
-        .name(timestamps::named("auto-unseal-vault2"))
-        .image(images::vault::IMAGE)
-        .cmd(vec!["server"])
-        .env(format!("VAULT_TOKEN={}", vault1_root_token))
-        .host_config(HostConfig::default()
-            .auto_remove()
-            .cap_add("IPC_LOCK")
-            .mount(hcl_file, VAULT_CONFIG_PATH, ReadOnly)
-        );
-
-    info!("Creating container");
-
-    let container = docker.containers().create(create)
-        .await?;
-
-    info!("Created container with id {}", container.id);
-    for w in &container.warnings {
-        warn!("Container warning: {}", w)
-    }
-
-    info!("Starting Vault 2");
-
-    docker.container(&container.id).start()
-        .await?;
-
-    Ok(container)
-}
-
-#[cfg(not(windows))]
-async fn wait_for_vault(docker: &DockerEngineClient, what: &str, vault: &CreateContainerResponse) -> Result<VaultApiUrl, ExampleError> {
-    let inspected = docker.container(&vault.id).inspect()
-        .await?;
-
-    let ip = inspected.first_ip_address()
-        .ok_or(ExampleError::Message(format!("Missing IP address for {}", what)))?;
-
-    let api_url = VaultApiUrl::new(format!("http://{}:8200", ip));
-
-    wait_for_http_server(api_url.status(), is_success())
-        .await?;
-
-    Ok(api_url)
+    VaultContainer::with_config(
+        &timestamps::named("auto-unseal-vault2"),
+        &hcl,
+        Some(vault1_root_token.to_string())
+    )
+        .await
 }
 
 #[cfg(not(windows))]
@@ -238,32 +156,22 @@ async fn run() -> Result<(), ExampleError> {
     let recovery_key_config = get_recovery_key_config()
         .map_err(ExampleError::Message)?;
 
-    let docker = DockerEngineClient::new()?;
-
-    let vault1 = create_and_start_vault1(&docker)
+    let vault1 = create_and_start_vault1()
         .await?;
 
-    let vault1_url = wait_for_vault(&docker, "Vault 1", &vault1)
+    let vault1_root_token = init_vault1(&vault1.url)
         .await?;
 
-    let vault1_root_token = init_vault1(&vault1_url)
+    let vault2 = create_and_start_vault2(&vault1.url, &vault1_root_token)
         .await?;
 
-    let vault2 = create_and_start_vault2(&docker, &vault1_url, &vault1_root_token)
+    init_vault2(&vault2.url, &recovery_key_config)
         .await?;
 
-    let vault2_url = wait_for_vault(&docker, "Vault 2", &vault2)
+    vault2.teardown()
         .await?;
 
-    init_vault2(&vault2_url, &recovery_key_config)
-        .await?;
-
-    info!("Stopping container {} then {}", &vault2.id, &vault1.id);
-
-    docker.container(&vault2.id).stop()
-        .await?;
-
-    docker.container(&vault1.id).stop()
+    vault1.teardown()
         .await?;
 
     Ok(())

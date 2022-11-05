@@ -16,10 +16,6 @@ listener \"tcp\" {
 
 ui = false";
 
-pub fn create_vault_config_file() -> Result<NamedTempFile, std::io::Error> {
-    create_vault_config_file_with_content(VAULT_CONFIG_HCL)
-}
-
 pub fn create_vault_config_file_with_content<C>(content: C) -> Result<NamedTempFile, std::io::Error>
 where
     C: Borrow<str>

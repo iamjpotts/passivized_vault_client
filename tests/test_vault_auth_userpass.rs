@@ -5,86 +5,31 @@
 mod example_utils;
 
 use log::*;
-use passivized_docker_engine_client::DockerEngineClient;
-use passivized_docker_engine_client::model::MountMode::ReadOnly;
-use passivized_docker_engine_client::requests::{CreateContainerRequest, HostConfig};
-use passivized_test_support::http_status_tests::is_success;
-use passivized_test_support::waiter::wait_for_http_server;
 use passivized_vault_client::client::{VaultApi, VaultApiUrl};
 use passivized_vault_client::errors::VaultClientError;
 use passivized_vault_client::models::{VaultInitRequest, VaultUnsealRequest, VaultUnsealProgress, VaultEnableAuthRequest, VaultAuthUserpassCreateRequest};
-use tempfile::NamedTempFile;
-
-use example_utils::hcl::{VAULT_CONFIG_PATH, create_vault_config_file};
-use example_utils::images;
-use example_utils::timestamps;
 
 #[tokio::test]
 async fn test_create_and_read_users() {
+    use example_utils::container::VaultContainer;
+
     const FN: &str = "test_create_and_read_users";
 
     passivized_test_support::logging::enable();
 
-    let config_hcl: NamedTempFile = create_vault_config_file()
-        .unwrap();
-
-    let hcl_file = config_hcl.path()
-        .to_str()
-        .unwrap();
-
-    let docker = DockerEngineClient::new()
-        .unwrap();
-
-    docker.images().pull_if_not_present(images::vault::NAME, images::vault::TAG)
+    let vc = VaultContainer::new(FN)
         .await
         .unwrap();
 
-    let create = CreateContainerRequest::default()
-        .name(timestamps::named(FN))
-        .image(images::vault::IMAGE)
-        .cmd(vec!["server"])
-        .host_config(HostConfig::default()
-            .auto_remove()
-            .cap_add("IPC_LOCK")
-            .mount(hcl_file, VAULT_CONFIG_PATH, ReadOnly)
-        );
-
-    info!("Creating container");
-
-    let container = docker.containers().create(create)
+    let root_token = init_and_unseal(vc.url.clone())
         .await
         .unwrap();
 
-    info!("Starting container");
-
-    docker.container(&container.id).start()
+    create_and_read_users(vc.url.clone(), &root_token)
         .await
         .unwrap();
 
-    let inspected = docker.container(&container.id).inspect()
-        .await
-        .unwrap();
-
-    let ip = inspected.first_ip_address()
-        .unwrap();
-
-    let api_url = VaultApiUrl::new(format!("http://{}:8200", ip));
-
-    wait_for_http_server(api_url.status(), is_success())
-        .await
-        .unwrap();
-
-    let root_token = init_and_unseal(api_url.clone())
-        .await
-        .unwrap();
-
-    create_and_read_users(api_url, &root_token)
-        .await
-        .unwrap();
-
-    info!("Stopping container {}", container.id);
-
-    docker.container(&container.id).stop()
+    vc.teardown()
         .await
         .unwrap();
 }

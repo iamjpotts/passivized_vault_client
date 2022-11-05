@@ -25,7 +25,8 @@ urlencoding = "2.1"
 
 [dev-dependencies]
 base64 = "0.13"
-passivized_docker_engine_client = "0.0.4"
-passivized_test_support = "0.0.4"
+const-str = "0.5"
+passivized_docker_engine_client = "0.0.5"
+passivized_test_support = "0.0.5"
 tempfile = "3.3"
 tokio = { version = "1.20", features = ["macros", "rt-multi-thread"] }

@@ -600,9 +600,9 @@ dependencies = [
 
 [[package]]
 name = "passivized_docker_engine_client"
-version = "0.0.4"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52891be937fc4a4ab239a76ba4bfaf2b9046f0f80d632d90374d61e409a2fc5a"
+checksum = "593499962047ecb2f693661f60ff005908908fb076d004b579f1760fcf62f24e"
 dependencies = [
  "base64",
  "byteorder",
@@ -621,9 +621,9 @@ dependencies = [
 
 [[package]]
 name = "passivized_test_support"
-version = "0.0.4"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a2ba50c835d95e7f8e9f420fcf97d43e76c534246bcea0d0f48d81fc6004ae0"
+checksum = "3aa0e2f71393aa147e9d22eca51d0aa2170cd2ddf03e97b8db8056376fb2930f"
 dependencies = [
  "backoff",
  "http",
@@ -642,6 +642,7 @@ name = "passivized_vault_client"
 version = "0.0.4"
 dependencies = [
  "base64",
+ "const-str",
  "http",
  "log",
  "passivized_docker_engine_client",
@@ -950,14 +951,14 @@ dependencies = [
 
 [[package]]
 name = "simple_logger"
-version = "2.3.0"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48047e77b528151aaf841a10a9025f9459da80ba820e425ff7eb005708a76dc7"
+checksum = "e190a521c2044948158666916d9e872cbb9984f755e9bb3b5b75a836205affcd"
 dependencies = [
  "atty",
  "log",
  "time",
- "winapi",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]

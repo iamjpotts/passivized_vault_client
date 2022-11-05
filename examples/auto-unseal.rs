@@ -46,6 +46,7 @@ use passivized_vault_client::models::{VaultEnableSecretsEngineRequest, VaultInit
 use tempfile::NamedTempFile;
 
 use example_utils::errors::ExampleError;
+use example_utils::images;
 use example_utils::timestamps;
 
 #[cfg(not(windows))]
@@ -181,7 +182,7 @@ async fn create_and_start_vault1(docker: &DockerEngineClient) -> Result<CreateCo
 
     let create = CreateContainerRequest::default()
         .name(timestamps::named("auto-unseal-vault1"))
-        .image("vault:1.11.0")
+        .image(images::vault::IMAGE)
         .cmd(vec!["server"])
         .host_config(HostConfig::default()
             .auto_remove()
@@ -218,7 +219,7 @@ async fn create_and_start_vault2(docker: &DockerEngineClient, vault1_url: &Vault
 
     let create = CreateContainerRequest::default()
         .name(timestamps::named("auto-unseal-vault2"))
-        .image("vault:1.11.0")
+        .image(images::vault::IMAGE)
         .cmd(vec!["server"])
         .env(format!("VAULT_TOKEN={}", vault1_root_token))
         .host_config(HostConfig::default()

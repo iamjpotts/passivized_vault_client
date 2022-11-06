@@ -358,11 +358,17 @@ impl VaultAuthUserpassApi {
         U: Borrow<str>,
         P: Borrow<str>
     {
+        let u = username.borrow();
+
+        if u.is_empty() {
+            return Err(VaultClientError::InvalidInput("username".into(), "Missing".into()));
+        }
+
         let request = VaultAuthUserpassLoginRequest {
             password: password.borrow().to_string()
         };
 
-        let url = self.url.userpass(&self.path).login(username);
+        let url = self.url.userpass(&self.path).login(u);
 
         info!("Connecting to {}", url);
 

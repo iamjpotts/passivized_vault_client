@@ -7,6 +7,10 @@ pub enum VaultClientError {
     #[error("Vault http request failed with status {0}\n{1}")]
     FailureResponse(StatusCode, String),
 
+    // Name, message
+    #[error("Invalid value for {0}: {1}")]
+    InvalidInput(String, String),
+
     #[error("Vault http request failed: {0}")]
     RequestFailed(reqwest::Error),
 

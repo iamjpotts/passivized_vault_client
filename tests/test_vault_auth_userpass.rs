@@ -127,6 +127,20 @@ async fn create_and_read_users(url: VaultApiUrl, root_token: &str) -> Result<(),
     // Get the value we set and validate its the same.
     assert_eq!(TOKEN_MAX_TTL, user1_detail.data.token_max_ttl);
 
+    // Try an empty username
+    info!("Validating that an error is returned for an empty username");
+    let failure = userpass.login("", PASSWORD1)
+        .await
+        .unwrap_err();
+
+    if let VaultClientError::InvalidInput(field, reason) = failure {
+        assert_eq!("username", field);
+        assert_eq!("Missing", reason);
+    }
+    else {
+        panic!("Unexpected failure: {:?}", failure);
+    }
+
     // Validate password
     info!("Validating password for {}", USERNAME1);
     assert_ne!(

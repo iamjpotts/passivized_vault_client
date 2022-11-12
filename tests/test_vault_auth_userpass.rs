@@ -103,6 +103,11 @@ async fn create_and_read_users(url: VaultApiUrl, root_token: &str) -> Result<(),
     vault.auth().enable(root_token, MOUNT_PATH, &enable_request)
         .await?;
 
+    let auth_detail = vault.auth().read(root_token, MOUNT_PATH)
+        .await?;
+
+    assert_eq!("userpass", auth_detail.type_);
+
     const USERNAME1: &str = "john";
     const PASSWORD1: &str = "crack-me";
     const PASSWORD1B: &str = "crack-me-again";

@@ -8,6 +8,56 @@ use std::collections::BTreeMap;
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// See https://developer.hashicorp.com/vault/api-docs/v1.11.x/system/auth#read-auth-method-configuration
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct VaultAuthReadResponse {
+
+    pub uuid: String,
+
+    #[serde(rename="type")]
+    pub type_: String,
+
+    pub accessor: String,
+    pub local: bool,
+    pub seal_wrap: bool,
+    pub external_entropy_access: bool,
+    pub options: Value,
+    pub config: Value,
+    pub description: String,
+    pub request_id: String,
+    pub lease_id: String,
+    pub renewable: bool,
+    pub lease_duration: u64,
+    pub data: VaultAuthReadResponseData,
+    pub wrap_info: Value,
+    pub warnings: Value,
+    pub auth: Value
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct VaultAuthReadResponseData {
+    pub accessor: String,
+    pub config: VaultAuthReadResponseDataConfig,
+    pub description: String,
+    pub external_entropy_access: bool,
+    pub local: bool,
+    pub options: Value,
+    pub seal_wrap: bool,
+
+    #[serde(rename="type")]
+    pub type_: String,
+
+    pub uuid: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct VaultAuthReadResponseDataConfig {
+    pub default_lease_ttl: u64,
+    pub force_no_cache: bool,
+    pub max_lease_ttl: u64,
+    pub token_type: String
+}
+
 #[derive(Clone, Debug, Default, Serialize)]
 pub struct VaultEnableAuthRequest {
 

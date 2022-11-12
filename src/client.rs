@@ -255,6 +255,30 @@ impl VaultAuthApi {
         }
     }
 
+    pub async fn read(&self, auth_token: &str, path: &str) -> Result<VaultAuthReadResponse, VaultClientError> {
+        let url = self.url.auth(path);
+
+        info!("Connecting to {}", url);
+
+        let response = reqwest::Client::new()
+            .get(url)
+            .header(VAULT_TOKEN_HEADER, auth_token)
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        if status.is_server_error() || status.is_client_error() {
+            Err(read_failure_response_into_error(response).await)
+        }
+        else {
+            response
+                .json()
+                .await
+                .map_err(VaultClientError::RequestFailed)
+        }
+    }
+
     pub fn userpass(&self, path: &str) -> VaultAuthUserpassApi {
         VaultAuthUserpassApi::new(self.url.clone(), path)
     }

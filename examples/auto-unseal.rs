@@ -131,7 +131,7 @@ async fn main() -> ExitCode {
 
 #[cfg(not(windows))]
 async fn create_and_start_vault1() -> Result<VaultContainer, ExampleError> {
-    use example_utils::timestamps;
+    use passivized_test_support::timestamps;
 
     VaultContainer::new(&timestamps::named("auto-unseal-vault1"))
         .await
@@ -139,7 +139,7 @@ async fn create_and_start_vault1() -> Result<VaultContainer, ExampleError> {
 
 #[cfg(not(windows))]
 async fn create_and_start_vault2(vault1_url: &VaultApiUrl, vault1_root_token: &str) -> Result<VaultContainer, ExampleError> {
-    use example_utils::timestamps;
+    use passivized_test_support::timestamps;
 
     let hcl = build_vault2_config_hcl(&vault1_url);
 

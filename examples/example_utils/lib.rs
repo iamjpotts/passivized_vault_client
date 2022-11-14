@@ -9,4 +9,3 @@ pub mod errors;
 pub mod hcl;
 
 pub mod images;
-pub mod timestamps;

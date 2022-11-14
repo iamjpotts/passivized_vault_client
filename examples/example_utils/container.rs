@@ -4,13 +4,14 @@ use passivized_docker_engine_client::errors::DecUseError;
 use passivized_docker_engine_client::model::MountMode::ReadOnly;
 use passivized_docker_engine_client::requests::{CreateContainerRequest, HostConfig};
 use passivized_test_support::http_status_tests::is_success;
+use passivized_test_support::timestamps;
 use passivized_test_support::waiter::wait_for_http_server;
 use tempfile::NamedTempFile;
 use passivized_vault_client::client::VaultApiUrl;
 
 use super::errors::ExampleError;
 use super::hcl::{create_vault_config_file_with_content, VAULT_CONFIG_HCL, VAULT_CONFIG_PATH};
-use super::{images, timestamps};
+use super::images;
 
 pub struct VaultContainer {
     pub docker: DockerEngineClient,

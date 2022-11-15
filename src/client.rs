@@ -69,6 +69,13 @@ impl VaultApiUrl {
         self.at("/v1/sys/seal-status")
     }
 
+    fn token(&self, path: &str) -> VaultAuthTokenApiUrl {
+        VaultAuthTokenApiUrl {
+            url: self.clone(),
+            path: path.into()
+        }
+    }
+
     // https://www.vaultproject.io/api-docs/secret/transit
     fn transit(&self, mount_path: &str, name: &str) -> String {
         self.at(format!("/v1/{}/keys/{}", mount_path, urlencoding::encode(name)))
@@ -85,6 +92,23 @@ impl VaultApiUrl {
             path: path.to_string()
         }
     }
+}
+
+struct VaultAuthTokenApiUrl {
+    url: VaultApiUrl,
+    path: String
+}
+
+impl VaultAuthTokenApiUrl {
+
+    fn create(&self) -> String {
+        self.url.at(format!("/v1/auth/{}/create", self.path))
+    }
+
+    fn lookup_self(&self) -> String {
+        self.url.at(format!("/v1/auth/{}/lookup-self", self.path))
+    }
+
 }
 
 struct VaultAuthUserpassApiUrl {
@@ -279,9 +303,78 @@ impl VaultAuthApi {
         }
     }
 
+    pub fn tokens(&self) -> VaultAuthTokensApi {
+        VaultAuthTokensApi::new(self.url.clone(), "token")
+    }
+
     pub fn userpass(&self, path: &str) -> VaultAuthUserpassApi {
         VaultAuthUserpassApi::new(self.url.clone(), path)
     }
+}
+
+pub struct VaultAuthTokensApi {
+    url: VaultApiUrl,
+    path: String
+}
+
+impl VaultAuthTokensApi {
+
+    fn new(url: VaultApiUrl, path: &str) -> Self {
+        Self {
+            url,
+            path: path.into()
+        }
+    }
+
+    pub async fn create(&self, auth_token: &str, request: &VaultAuthTokenCreateRequest) -> Result<VaultAuthTokenCreateResponse, VaultClientError> {
+        let url = self.url.token(&self.path).create();
+
+        info!("Connecting to {}", url);
+
+        let response = reqwest::Client::new()
+            .post(url)
+            .header(VAULT_TOKEN_HEADER, auth_token)
+            .json(request)
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        if status.is_server_error() || status.is_client_error() {
+            Err(read_failure_response_into_error(response).await)
+        }
+        else {
+            response
+                .json()
+                .await
+                .map_err(VaultClientError::RequestFailed)
+        }
+    }
+
+    pub async fn lookup_self(&self, auth_token: &str) -> Result<VaultAuthTokenLookupSelfResponse, VaultClientError> {
+        let url = self.url.token(&self.path).lookup_self();
+
+        info!("Connecting to {}", url);
+
+        let response = reqwest::Client::new()
+            .get(url)
+            .header(VAULT_TOKEN_HEADER, auth_token)
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        if status.is_server_error() || status.is_client_error() {
+            Err(read_failure_response_into_error(response).await)
+        }
+        else {
+            response
+                .json()
+                .await
+                .map_err(VaultClientError::RequestFailed)
+        }
+    }
+
 }
 
 pub struct VaultAuthUserpassApi {
@@ -291,7 +384,7 @@ pub struct VaultAuthUserpassApi {
 
 impl VaultAuthUserpassApi {
 
-    pub fn new(url: VaultApiUrl, path: &str) -> Self {
+    fn new(url: VaultApiUrl, path: &str) -> Self {
         Self {
             url,
             path: path.into()
@@ -744,6 +837,25 @@ mod test_vault_api_url {
         let url = VaultApiUrl::new("");
 
         assert_eq!("/v1/a/keys/b", url.transit("a", "b"));
+    }
+
+    #[cfg(test)]
+    mod token {
+        use crate::client::VaultApiUrl;
+
+        #[test]
+        fn create() {
+            let url = VaultApiUrl::new("");
+
+            assert_eq!("/v1/auth/token/create", url.token("token").create());
+        }
+
+        #[test]
+        fn lookup_self() {
+            let url = VaultApiUrl::new("");
+
+            assert_eq!("/v1/auth/foo/lookup-self", url.token("foo").lookup_self());
+        }
     }
 
     #[test]

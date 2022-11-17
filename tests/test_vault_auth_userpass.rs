@@ -4,10 +4,28 @@
 #[path = "../examples/example_utils/lib.rs"]
 mod example_utils;
 
+use std::path::{Path, PathBuf};
+use http::StatusCode;
 use log::*;
 use passivized_vault_client::client::{VaultApi, VaultApiUrl};
 use passivized_vault_client::errors::VaultClientError;
 use passivized_vault_client::models::{VaultInitRequest, VaultUnsealRequest, VaultUnsealProgress, VaultEnableAuthRequest, VaultAuthUserpassCreateRequest};
+
+fn resources_path() -> PathBuf {
+    Path::new(file!())
+        .parent()
+        .unwrap()
+        .join("resources")
+}
+
+async fn read_change_own_password_hcl() -> String {
+    let file_name = resources_path()
+        .join("change_own_password.hcl");
+
+    tokio::fs::read_to_string(file_name)
+        .await
+        .unwrap()
+}
 
 #[tokio::test]
 async fn test_create_and_read_users() {
@@ -108,12 +126,22 @@ async fn create_and_read_users(url: VaultApiUrl, root_token: &str) -> Result<(),
 
     assert_eq!("userpass", auth_detail.type_);
 
+    info!("Userpass {} accessor: {}", MOUNT_PATH, auth_detail.accessor);
+
     const USERNAME1: &str = "john";
     const PASSWORD1: &str = "crack-me";
     const PASSWORD1B: &str = "crack-me-again";
 
     const USERNAME2: &str = "mary";
     const PASSWORD2: &str = "super-secure";
+    const PASSWORD2B: &str = "nsa-was-here";
+
+    const PASSWORD_POLICY_NAME: &str = "change-own-password";
+    const PASSWORD_POLICY_ACCESSOR_PLACEHOLDER: &str = "${userpass_accessor}";
+
+    const USERNAME3: &str = "hank";
+    const PASSWORD3: &str = "apples";
+    const PASSWORD3B: &str = "oranges";
 
     // Arbitrary value used to test setting and receiving properties of the user
     const TOKEN_MAX_TTL: u64 = 12345678;
@@ -202,6 +230,107 @@ async fn create_and_read_users(url: VaultApiUrl, root_token: &str) -> Result<(),
         .keys;
 
     assert_eq!(vec![USERNAME2.to_string()], users);
+
+    let mut policy = read_change_own_password_hcl()
+        .await;
+
+    policy = policy
+        .replace(PASSWORD_POLICY_ACCESSOR_PLACEHOLDER, &auth_detail.accessor);
+
+    // Add a policy allowing users to change their own passwords but not each other's.
+    vault.policies().acl().put(root_token, PASSWORD_POLICY_NAME, &policy)
+        .await
+        .unwrap();
+
+    let policies = vault.policies().acl().list(root_token)
+        .await
+        .unwrap()
+        .data
+        .keys;
+
+    info!("Have {} policies:", policies.len());
+
+    for p in policies {
+        info!("  {}", p);
+    }
+
+    let applied_policy = vault.policies().acl().get(root_token, PASSWORD_POLICY_NAME)
+        .await?
+        .data
+        .policy;
+
+    info!("Policy content:\n{}", applied_policy);
+    assert_eq!(policy, applied_policy);
+
+    info!("Logging in as {}", USERNAME2);
+    let user2_token = userpass.login(USERNAME2, PASSWORD2)
+        .await
+        .unwrap()
+        .unwrap()
+        .auth
+        .client_token;
+
+    info!("Changing own password for {} should still fail (policy not attached to user)", USERNAME2);
+    let update_failure = userpass.update_password(&user2_token, USERNAME2, PASSWORD2B)
+        .await
+        .unwrap_err();
+
+    if let VaultClientError::FailureResponse(status, _) = update_failure {
+        assert_eq!(StatusCode::FORBIDDEN, status);
+    }
+    else {
+        panic!("Unexpected failure: {:?}", update_failure);
+    }
+
+    // Add a third user, with a policy attached
+    info!("Adding user {}", USERNAME3);
+
+    let user3_request = VaultAuthUserpassCreateRequest {
+        password: PASSWORD3.into(),
+        token_policies: Some(vec![PASSWORD_POLICY_NAME.to_string()]),
+        ..Default::default()
+    };
+
+    userpass.create(root_token, USERNAME3, &user3_request)
+        .await?;
+
+    info!("Logging in as {}", USERNAME3);
+    let user3_token = userpass.login(USERNAME3, PASSWORD3)
+        .await
+        .unwrap()
+        .unwrap()
+        .auth
+        .client_token;
+
+    let user3_detail = userpass.read(root_token, USERNAME3)
+        .await
+        .unwrap();
+
+    info!("user3: {:?}", user3_detail.data);
+
+    info!("Changing own password for {}", USERNAME3);
+    userpass.update_password(&user3_token, USERNAME3, PASSWORD3B)
+        .await?;
+
+    info!("Logging in as {} with new password", USERNAME3);
+    assert_ne!(
+        None,
+        userpass.login(USERNAME3, PASSWORD3B)
+            .await
+            .unwrap()
+    );
+
+    info!("User {} changing user {}'s password should fail", USERNAME3, USERNAME2);
+    let update_failure = userpass.update_password(&user3_token, USERNAME2, PASSWORD2B)
+        .await
+        .unwrap_err();
+
+    if let VaultClientError::FailureResponse(status, _) = update_failure {
+        assert_eq!(StatusCode::FORBIDDEN, status);
+    }
+    else {
+        panic!("Unexpected failure: {:?}", update_failure);
+    }
 
     Ok(())
 }

@@ -65,6 +65,12 @@ impl VaultApiUrl {
         self.at("/v1/sys/plugins/catalog")
     }
 
+    fn policies(&self) -> VaultPoliciesApiUrl {
+        VaultPoliciesApiUrl {
+            url: self.clone()
+        }
+    }
+
     pub fn status(&self) -> String {
         self.at("/v1/sys/seal-status")
     }
@@ -135,6 +141,34 @@ impl VaultAuthUserpassApiUrl {
     }
 }
 
+struct VaultPoliciesApiUrl {
+    url: VaultApiUrl
+}
+
+impl VaultPoliciesApiUrl {
+
+    fn acl(&self) -> VaultPoliciesAclApiUrl {
+        VaultPoliciesAclApiUrl {
+            url: self.url.clone()
+        }
+    }
+}
+
+struct VaultPoliciesAclApiUrl {
+    url: VaultApiUrl
+}
+
+impl VaultPoliciesAclApiUrl {
+
+    fn list(&self) -> String {
+        self.url.at("/v1/sys/policies/acl")
+    }
+
+    fn item(&self, name: &str) -> String {
+        format!("{}/{}", self.list(), name)
+    }
+
+}
 
 /// A typed, stateless interface over the Vault HTTP api
 pub struct VaultApi {
@@ -215,6 +249,10 @@ impl VaultApi {
 
     pub fn plugins(&self) -> VaultPluginsApi {
         VaultPluginsApi::new(self.url.clone())
+    }
+
+    pub fn policies(&self) -> VaultPoliciesApi {
+        VaultPoliciesApi::new(self.url.clone())
     }
 
     pub fn transit(&self) -> VaultTransitApi {
@@ -445,11 +483,8 @@ impl VaultAuthUserpassApi {
 
         info!("Connecting to {}", url);
 
-        let list = Method::from_str("LIST")
-            .map_err(|e| VaultClientError::Other(Box::new(e)))?;
-
         let response = reqwest::Client::new()
-            .request(list, url)
+            .request(http_list()?, url)
             .header(VAULT_TOKEN_HEADER, auth_token)
             .send()
             .await?;
@@ -690,6 +725,111 @@ impl VaultPluginsApi {
     }
 }
 
+pub struct VaultPoliciesApi {
+    url: VaultApiUrl
+}
+
+impl VaultPoliciesApi {
+
+    pub(super) fn new(url: VaultApiUrl) -> Self {
+        Self {
+            url
+        }
+    }
+
+    pub fn acl(&self) -> VaultPoliciesAclApi {
+        VaultPoliciesAclApi {
+            url: self.url.clone()
+        }
+    }
+}
+
+pub struct VaultPoliciesAclApi {
+    url: VaultApiUrl
+}
+
+impl VaultPoliciesAclApi {
+
+    /// https://developer.hashicorp.com/vault/api-docs/v1.11.x/system/policies#list-acl-policies
+    pub async fn list(&self, auth_token: &str) -> Result<VaultPoliciesAclListResponse, VaultClientError> {
+        let url = self.url.policies().acl().list();
+
+        info!("Connecting to {}", url);
+
+        let response = reqwest::Client::new()
+            .request(http_list()?, url)
+            .header(VAULT_TOKEN_HEADER, auth_token)
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        if status.is_server_error() || status.is_client_error() {
+            Err(read_failure_response_into_error(response).await)
+        }
+        else {
+            response
+                .json()
+                .await
+                .map_err(VaultClientError::RequestFailed)
+        }
+    }
+
+    /// Read a policy.
+    /// https://developer.hashicorp.com/vault/api-docs/v1.11.x/system/policies#read-acl-policy
+    pub async fn get(&self, auth_token: &str, name: &str) -> Result<VaultPoliciesAclReadResponse, VaultClientError> {
+        let url = self.url.policies().acl().item(name);
+
+        info!("Connecting to {}", url);
+
+        let response = reqwest::Client::new()
+            .get(url)
+            .header(VAULT_TOKEN_HEADER, auth_token)
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        if status.is_server_error() || status.is_client_error() {
+            Err(read_failure_response_into_error(response).await)
+        }
+        else {
+            response
+                .json()
+                .await
+                .map_err(VaultClientError::RequestFailed)
+        }
+    }
+
+    /// Create or update a policy.
+    /// https://developer.hashicorp.com/vault/api-docs/v1.11.x/system/policies#create-update-acl-policy
+    pub async fn put<P: Into<String>>(&self, auth_token: &str, name: &str, policy: P) -> Result<(), VaultClientError> {
+        let url = self.url.policies().acl().item(name);
+
+        info!("Connecting to {}", url);
+
+        let request = VaultPoliciesAclUpsertRequest {
+            policy: policy.into()
+        };
+
+        let response = reqwest::Client::new()
+            .post(url)
+            .header(VAULT_TOKEN_HEADER, auth_token)
+            .json(&request)
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        if status.is_server_error() || status.is_client_error() {
+            Err(read_failure_response_into_error(response).await)
+        }
+        else {
+            Ok(())
+        }
+    }
+}
+
 pub struct VaultCatalogApi {
     url: VaultApiUrl
 }
@@ -800,6 +940,11 @@ async fn read_failure_response_into_error(response: reqwest::Response) -> VaultC
     }
 }
 
+fn http_list() -> Result<Method, VaultClientError> {
+    Method::from_str("LIST")
+        .map_err(|e| VaultClientError::Other(Box::new(e)))
+}
+
 #[cfg(test)]
 mod test_vault_api_url {
     use super::VaultApiUrl;
@@ -837,6 +982,29 @@ mod test_vault_api_url {
         let url = VaultApiUrl::new("");
 
         assert_eq!("/v1/a/keys/b", url.transit("a", "b"));
+    }
+
+    #[cfg(test)]
+    mod policies {
+
+        mod acl {
+            use crate::client::VaultApiUrl;
+
+            #[test]
+            fn item() {
+                let url = VaultApiUrl::new("");
+
+                assert_eq!("/v1/sys/policies/acl/foo", url.policies().acl().item("foo"));
+            }
+
+            #[test]
+            fn list() {
+                let url = VaultApiUrl::new("");
+
+                assert_eq!("/v1/sys/policies/acl", url.policies().acl().list());
+            }
+        }
+
     }
 
     #[cfg(test)]

@@ -11,8 +11,14 @@ A client library for working with [Vault](https://www.vaultproject.io/) through 
 * Generation of clear or encrypted recovery keys
 * Configuring transit keys and transit unseal
 
+### Policies
+
+* Create, update, and list policies
+* Attach policies to userpass users
+
 ### Monitoring
-  * Getting status
+
+* Getting status
 
 ### Username/Password Authentication
 

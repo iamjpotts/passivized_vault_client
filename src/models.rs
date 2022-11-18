@@ -452,7 +452,60 @@ pub struct VaultMountsResponseItem {
 
 }
 
-// https://www.vaultproject.io/api-docs/secret/transit
+/// https://developer.hashicorp.com/vault/api-docs/v1.11.x/system/policies
+#[derive(Clone, Debug, Deserialize)]
+pub struct VaultPoliciesAclListResponse {
+
+    pub request_id: String,
+    pub lease_id: String,
+    pub renewable: bool,
+    pub lease_duration: u64,
+    pub data: VaultPoliciesAclListResponseData,
+    pub wrap_info: Value,
+    pub warnings: Value,
+    pub auth: Value
+
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct VaultPoliciesAclListResponseData {
+
+    pub keys: Vec<String>
+
+}
+
+/// https://developer.hashicorp.com/vault/api-docs/v1.11.x/system/policies
+#[derive(Clone, Debug, Deserialize)]
+pub struct VaultPoliciesAclReadResponse {
+
+    pub request_id: String,
+    pub lease_id: String,
+    pub renewable: bool,
+    pub lease_duration: u64,
+    pub data: VaultPoliciesAclReadResponseData,
+    pub wrap_info: Value,
+    pub warnings: Value,
+    pub auth: Value
+
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct VaultPoliciesAclReadResponseData {
+
+    pub name: String,
+    pub policy: String
+
+}
+
+/// https://developer.hashicorp.com/vault/api-docs/v1.11.x/system/policies
+#[derive(Clone, Debug, Serialize)]
+pub(crate) struct VaultPoliciesAclUpsertRequest {
+
+    pub policy: String
+
+}
+
+/// https://www.vaultproject.io/api-docs/secret/transit
 #[derive(Clone, Debug, Deserialize)]
 pub struct VaultTransitKeyReadResponse {
 

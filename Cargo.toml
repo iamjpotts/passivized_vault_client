@@ -10,7 +10,7 @@ license = "MPL-2.0"
 name = "passivized_vault_client"
 repository = "https://github.com/iamjpotts/passivized_vault_client"
 rust-version = "1.64"
-version = "0.0.6"
+version = "0.0.7"
 
 [dependencies]
 http = "0.2"

@@ -148,6 +148,13 @@ async fn create_and_read_users(url: VaultApiUrl, root_token: &str) -> Result<(),
 
     let userpass = vault.auth().userpass(MOUNT_PATH);
 
+    // When there are zero users, validate that we get an empty list back rather than an error.
+    let empty = userpass.list(root_token)
+        .await
+        .unwrap();
+
+    assert_eq!(0, empty.data.keys.len());
+
     let mut user1_request = VaultAuthUserpassCreateRequest::with_password(PASSWORD1);
     user1_request.token_max_ttl = Some(TOKEN_MAX_TTL);
 

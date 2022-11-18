@@ -128,9 +128,8 @@ async fn create_and_read_tokens(url: VaultApiUrl, root_token: &str) -> Result<()
         .await
         .unwrap_err();
 
-    if let VaultClientError::FailureResponse(status, json) = response {
+    if let VaultClientError::FailureResponse(status, _) = response {
         assert_eq!(StatusCode::FORBIDDEN, status);
-        assert!(json.contains("permission denied"));
     }
     else {
         panic!("Unexpected response: {:?}", response);

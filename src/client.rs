@@ -4,8 +4,10 @@ use std::str::FromStr;
 
 use http::{Method, StatusCode};
 use log::info;
+use serde_json::Value;
 
-use crate::errors::VaultClientError;
+use crate::errors::{VaultClientError, VaultClientErrorContent, VaultErrorsResponse};
+use crate::imp::{header_value};
 use crate::models::*;
 
 pub use crate::url::VaultApiUrl;
@@ -72,11 +74,7 @@ impl VaultApi {
         let status = response.status();
 
         if status.is_server_error() || status.is_client_error() {
-            let failure_body = response
-                .text()
-                .await?;
-
-            Err(VaultClientError::FailureResponse(status, failure_body))
+            Err(read_failure_response_into_error(response).await)
         }
         else {
             response
@@ -334,7 +332,15 @@ impl VaultAuthUserpassApi {
         let status = response.status();
 
         if status.is_server_error() || status.is_client_error() {
-            Err(read_failure_response_into_error(response).await)
+            let failure = read_failure_response_into_error(response).await;
+
+            if let VaultClientError::FailureResponse(StatusCode::NOT_FOUND, VaultClientErrorContent::Errors(messages)) = &failure {
+                if messages.len() == 0 {
+                    return Ok(VaultAuthUserpassListResponse::empty());
+                }
+            }
+
+            Err(failure)
         }
         else {
             response
@@ -394,9 +400,11 @@ impl VaultAuthUserpassApi {
     }
 
     fn is_login_failure(err: &VaultClientError) -> bool {
-        if let VaultClientError::FailureResponse(fr_status, fr_message) = err {
-            if *fr_status == StatusCode::BAD_REQUEST && fr_message.contains("invalid username or password") {
-                return true;
+        if let VaultClientError::FailureResponse(fr_status, VaultClientErrorContent::Errors(messages)) = err {
+            if *fr_status == StatusCode::BAD_REQUEST {
+                return messages
+                    .iter()
+                    .any(|e| e.contains("invalid username or password"));
             }
         }
 
@@ -771,13 +779,42 @@ impl VaultTransitApi {
 
 async fn read_failure_response_into_error(response: reqwest::Response) -> VaultClientError {
     let status = response.status();
+    let content_type = header_value(&response, "Content-Type");
 
-    match response.text().await {
-        Ok(text) => {
-            VaultClientError::FailureResponse(status, text)
+    if Some("application/json".to_string()) == content_type {
+        let parsed: Result<Value, reqwest::Error> = response.json().await;
+
+        match parsed {
+            Ok(value) => {
+                let errors: Result<VaultErrorsResponse, serde_json::Error> = serde_json::from_value(value.clone());
+
+                let vcec = match errors {
+                    Ok(parsed_errors) => {
+                        VaultClientErrorContent::Errors(parsed_errors.errors)
+                    }
+                    Err(_) => {
+                        VaultClientErrorContent::Json(value)
+                    }
+                };
+
+                VaultClientError::FailureResponse(status, vcec)
+            }
+            Err(e) => {
+                VaultClientError::RequestFailed(e)
+            }
         }
-        Err(e) => {
-            VaultClientError::RequestFailed(e)
+    }
+    else {
+        match response.text().await {
+            Ok(text) => {
+                VaultClientError::FailureResponse(
+                    status,
+                    VaultClientErrorContent::Text(text)
+                )
+            }
+            Err(e) => {
+                VaultClientError::RequestFailed(e)
+            }
         }
     }
 }
@@ -807,10 +844,14 @@ mod test_vault_userpass_api {
         use std::array::TryFromSliceError;
         use http::StatusCode;
         use crate::client::VaultAuthUserpassApi;
-        use crate::errors::VaultClientError;
+        use crate::errors::{VaultClientError, VaultClientErrorContent};
 
         const MATCHING_STATUS: StatusCode = StatusCode::BAD_REQUEST;
         const MATCHING_MESSAGE: &str = "invalid username or password";
+
+        fn matching() -> VaultClientErrorContent {
+            VaultClientErrorContent::Errors(vec![MATCHING_MESSAGE.to_string()])
+        }
 
         #[test]
         fn false_when_network() {
@@ -823,21 +864,30 @@ mod test_vault_userpass_api {
 
         #[test]
         fn false_when_wrong_message() {
-            let err = VaultClientError::FailureResponse(MATCHING_STATUS, "abc".into());
+            let err = VaultClientError::FailureResponse(
+                MATCHING_STATUS,
+                VaultClientErrorContent::Text("abc".into())
+            );
 
             assert!(!VaultAuthUserpassApi::is_login_failure(&err));
         }
 
         #[test]
         fn false_when_wrong_status() {
-            let err = VaultClientError::FailureResponse(StatusCode::UNAUTHORIZED, MATCHING_MESSAGE.into());
+            let err = VaultClientError::FailureResponse(
+                StatusCode::UNAUTHORIZED,
+                matching()
+            );
 
             assert!(!VaultAuthUserpassApi::is_login_failure(&err));
         }
 
         #[test]
         fn true_when_message_match() {
-            let err = VaultClientError::FailureResponse(MATCHING_STATUS, MATCHING_MESSAGE.into());
+            let err = VaultClientError::FailureResponse(
+                MATCHING_STATUS,
+                matching()
+            );
 
             assert!(VaultAuthUserpassApi::is_login_failure(&err));
         }

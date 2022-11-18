@@ -100,10 +100,30 @@ pub struct VaultAuthUserpassListResponse {
     pub data: VaultAuthUserpassListResponseData,
 }
 
+impl VaultAuthUserpassListResponse {
+
+    pub(crate) fn empty() -> Self {
+        Self {
+            data: VaultAuthUserpassListResponseData::empty()
+        }
+    }
+
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct VaultAuthUserpassListResponseData {
     /// Usernames
     pub keys: Vec<String>
+}
+
+impl VaultAuthUserpassListResponseData {
+
+    pub(crate) fn empty() -> Self {
+        Self {
+            keys: Default::default()
+        }
+    }
+
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

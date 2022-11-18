@@ -1,11 +1,14 @@
 use core::marker::Send;
 use http::status::StatusCode;
+use serde_derive::Deserialize;
 use std::error::Error;
+use std::fmt::{Display, Formatter};
+use serde_json::Value;
 
 #[derive(Debug, thiserror::Error)]
 pub enum VaultClientError {
     #[error("Vault http request failed with status {0}\n{1}")]
-    FailureResponse(StatusCode, String),
+    FailureResponse(StatusCode, VaultClientErrorContent),
 
     // Name, message
     #[error("Invalid value for {0}: {1}")]
@@ -22,6 +25,46 @@ impl From<reqwest::Error> for VaultClientError {
     fn from(other: reqwest::Error) -> Self {
         VaultClientError::RequestFailed(other)
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum VaultClientErrorContent {
+    Errors(Vec<String>),
+    Json(Value),
+    Text(String),
+}
+
+fn write_errors(f: &mut Formatter<'_>, messages: &Vec<String>) -> std::fmt::Result {
+    let mut first = true;
+
+    for m in messages {
+        if first {
+            first = false;
+        }
+        else {
+            write!(f, ", ")?;
+        }
+
+        write!(f, "{}", m)?;
+    }
+
+    Ok(())
+}
+
+impl Display for VaultClientErrorContent {
+
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Errors(values) => write_errors(f, values),
+            Self::Json(value) => write!(f, "{}", value),
+            Self::Text(value) => write!(f, "{}", value)
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+pub(crate) struct VaultErrorsResponse {
+    pub errors: Vec<String>
 }
 
 #[cfg(test)]
@@ -61,4 +104,40 @@ mod test_vault_client_error {
             panic!("Unexpected error: {:?}", actual);
         }
     }
+}
+
+#[cfg(test)]
+mod test_vault_client_error_content {
+
+    mod display {
+        use serde_json::Value;
+        use crate::errors::VaultClientErrorContent;
+
+        #[test]
+        fn from_errors_empty() {
+            assert_eq!("", format!("{}", VaultClientErrorContent::Errors(vec![])))
+        }
+
+        #[test]
+        fn from_errors_one() {
+            assert_eq!("foo", format!("{}", VaultClientErrorContent::Errors(vec!["foo".into()])))
+        }
+
+        #[test]
+        fn from_errors_multiple() {
+            assert_eq!("foo, bar", format!("{}", VaultClientErrorContent::Errors(vec!["foo".into(), "bar".into()])))
+        }
+
+        #[test]
+        fn from_json() {
+            assert_eq!("123", format!("{}", VaultClientErrorContent::Json(Value::Number(123.into()))))
+        }
+
+        #[test]
+        fn from_text() {
+            assert_eq!("boom", format!("{}", VaultClientErrorContent::Text("boom".into())))
+        }
+
+    }
+
 }

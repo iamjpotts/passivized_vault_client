@@ -24,7 +24,7 @@ time = "0.3"
 urlencoding = "2.1"
 
 [dev-dependencies]
-base64 = "0.20"
+base64 = "0.21"
 const-str = "0.5"
 passivized_docker_engine_client = "0.0.6"
 passivized_test_support = "0.0.7"

@@ -44,6 +44,9 @@ use example_utils::container::VaultContainer;
 use example_utils::errors::ExampleError;
 
 #[cfg(not(windows))]
+use example_utils::other::{base64_decode, base64_encode};
+
+#[cfg(not(windows))]
 const TRANSIT_MOUNT_TYPE: &str = "transit";
 
 #[cfg(not(windows))]
@@ -263,7 +266,7 @@ async fn init_vault2(url: &VaultApiUrl, recovery_key_config: &Option<RecoveryKey
 
                 let content = fs::read(public_key_file)?;
 
-                public_keys.push(base64::encode(content));
+                public_keys.push(base64_encode(content));
             }
 
             VaultInitRequest {
@@ -309,7 +312,7 @@ async fn init_vault2(url: &VaultApiUrl, recovery_key_config: &Option<RecoveryKey
                 let output_file = Path::new(&rkc.recovery_key_folder)
                     .join(output_file_name);
 
-                let decoded = base64::decode(encoded)
+                let decoded = base64_decode(encoded)
                     .map_err(|e| ExampleError::Message(format!("Failed to decode recovery key: {:?}", e)))?;
 
                 info!("Writing {}", output_file.to_str().unwrap());

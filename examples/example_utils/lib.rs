@@ -9,3 +9,6 @@ pub mod errors;
 pub mod hcl;
 
 pub mod images;
+
+#[cfg(not(windows))]
+pub mod other;

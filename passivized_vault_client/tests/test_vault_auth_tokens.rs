@@ -4,22 +4,30 @@
 #[path = "../examples/example_utils/lib.rs"]
 mod example_utils;
 
+#[path = "test_utils/lib.rs"]
+mod test_utils;
+
 use std::collections::HashMap;
 use http::StatusCode;
 use log::*;
 use passivized_vault_client::client::{VaultApi, VaultApiUrl};
 use passivized_vault_client::errors::VaultClientError;
 use passivized_vault_client::models::{VaultInitRequest, VaultUnsealRequest, VaultUnsealProgress, VaultAuthTokenCreateRequest};
+use passivized_vault_client_versions::test_supported_images;
 
-#[tokio::test]
-async fn test_create_and_read_tokens() {
+#[test_supported_images]
+fn test_create_and_read_tokens(image_name: &str, image_tag: &str) {
+    test_utils::run_async(run_test(image_name, image_tag))
+}
+
+async fn run_test(image_name: &str, image_tag: &str) {
     use example_utils::container::VaultContainer;
 
     const FN: &str = "test_create_and_read_tokens";
 
-    passivized_test_support::logging::enable();
+    passivized_test_support::logging::enable_idempotent();
 
-    let vc = VaultContainer::new(FN)
+    let vc = VaultContainer::with_image(image_name, image_tag, FN)
         .await
         .unwrap();
 

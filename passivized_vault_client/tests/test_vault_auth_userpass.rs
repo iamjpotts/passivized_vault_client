@@ -4,15 +4,46 @@
 #[path = "../examples/example_utils/lib.rs"]
 mod example_utils;
 
+#[path = "test_utils/lib.rs"]
+mod test_utils;
+
 use std::path::{Path, PathBuf};
 use http::StatusCode;
 use log::*;
 use passivized_vault_client::client::{VaultApi, VaultApiUrl};
 use passivized_vault_client::errors::VaultClientError;
 use passivized_vault_client::models::{VaultInitRequest, VaultUnsealRequest, VaultUnsealProgress, VaultEnableAuthRequest, VaultAuthUserpassCreateRequest};
+use passivized_vault_client_versions::test_supported_images;
+
+fn this_file() -> PathBuf {
+    let relative = Path::new(file!());
+
+    if relative.is_file() {
+        relative.to_path_buf()
+    }
+    else {
+        let current = std::env::current_dir()
+            .unwrap();
+
+        let result = current
+            .parent()
+            .unwrap()
+            .join(relative);
+
+        if result.is_file() {
+            // rust reported wrong file path, but we fixed it by stripping leaf off of cwd
+            result
+        }
+        else {
+            relative.to_path_buf()
+        }
+    }
+}
 
 fn resources_path() -> PathBuf {
-    Path::new(file!())
+    this_file()
+        .canonicalize()
+        .unwrap()
         .parent()
         .unwrap()
         .join("resources")
@@ -27,15 +58,19 @@ async fn read_change_own_password_hcl() -> String {
         .unwrap()
 }
 
-#[tokio::test]
-async fn test_create_and_read_users() {
+#[test_supported_images]
+fn test_create_and_read_users(image_name: &str, image_tag: &str) {
+    test_utils::run_async(run_test(image_name, image_tag))
+}
+
+async fn run_test(image_name: &str, image_tag: &str) {
     use example_utils::container::VaultContainer;
 
     const FN: &str = "test_create_and_read_users";
 
-    passivized_test_support::logging::enable();
+    passivized_test_support::logging::enable_idempotent();
 
-    let vc = VaultContainer::new(FN)
+    let vc = VaultContainer::with_image(image_name, image_tag, FN)
         .await
         .unwrap();
 

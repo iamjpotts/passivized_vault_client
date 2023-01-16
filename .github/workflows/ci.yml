@@ -11,9 +11,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - macOS-latest
           - ubuntu-20.04
-          - windows-2022
         toolchain:
           - stable
     runs-on: ${{ matrix.os }}
@@ -24,7 +22,7 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
       - run: cargo install cargo-deny
       - run: cargo deny check
-    timeout-minutes: 30
+    timeout-minutes: 20
 
   test-mac:
     name: Cargo test on Mac

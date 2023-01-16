@@ -335,7 +335,7 @@ impl VaultAuthUserpassApi {
             let failure = read_failure_response_into_error(response).await;
 
             if let VaultClientError::FailureResponse(StatusCode::NOT_FOUND, VaultClientErrorContent::Errors(messages)) = &failure {
-                if messages.len() == 0 {
+                if messages.is_empty() {
                     return Ok(VaultAuthUserpassListResponse::empty());
                 }
             }

@@ -39,7 +39,7 @@ See the warning on [REST api](https://www.vaultproject.io/api-docs):
 
 The above warning means this library could potentially break with newer versions of Vault.
 
-The library is experimental, and currently tested only with Vault 1.11.
+The library is experimental, and tested with Vault 1.11 through 1.12.
 
 ## GPG Key Generation
 

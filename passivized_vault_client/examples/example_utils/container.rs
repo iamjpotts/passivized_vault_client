@@ -1,3 +1,4 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
 use log::{info, warn};
 use passivized_docker_engine_client::DockerEngineClient;
 use passivized_docker_engine_client::errors::DecUseError;
@@ -11,7 +12,8 @@ use passivized_vault_client::client::VaultApiUrl;
 
 use super::errors::ExampleError;
 use super::hcl::{create_vault_config_file_with_content, VAULT_CONFIG_HCL, VAULT_CONFIG_PATH};
-use super::images;
+
+static SEQUENCE: AtomicUsize = AtomicUsize::new(0);
 
 pub struct VaultContainer {
     pub docker: DockerEngineClient,
@@ -22,11 +24,27 @@ pub struct VaultContainer {
 impl VaultContainer {
 
     pub async fn new(name: &str) -> Result<Self, ExampleError> {
-        Self::with_config(name, VAULT_CONFIG_HCL, None)
+        use super::images;
+
+        Self::with(images::vault::NAME, images::vault::TAG, name, VAULT_CONFIG_HCL, None)
+            .await
+    }
+
+    pub async fn with_image(image_name: &str, image_tag: &str, name: &str) -> Result<Self, ExampleError> {
+        Self::with(image_name, image_tag, name, VAULT_CONFIG_HCL, None)
             .await
     }
 
     pub async fn with_config(name: &str, hcl: &str, vault_token: Option<String>) -> Result<Self, ExampleError> {
+        use super::images;
+
+        Self::with(images::vault::NAME, images::vault::TAG, name, hcl, vault_token)
+            .await
+    }
+
+    async fn with(image_name: &str, image_tag: &str, name: &str, hcl: &str, vault_token: Option<String>) -> Result<Self, ExampleError> {
+        let sequence = SEQUENCE.fetch_add(1, Ordering::SeqCst);
+
         let config_hcl: NamedTempFile = create_vault_config_file_with_content(hcl)
             .unwrap();
 
@@ -36,12 +54,12 @@ impl VaultContainer {
 
         let docker = DockerEngineClient::new()?;
 
-        docker.images().pull_if_not_present(images::vault::NAME, images::vault::TAG)
+        docker.images().pull_if_not_present(image_name, image_tag)
             .await?;
 
         let mut create = CreateContainerRequest::default()
-            .name(timestamps::named(name))
-            .image(images::vault::IMAGE)
+            .name(format!("{}-{}", timestamps::named(name), sequence))
+            .image(format!("{}:{}", image_name, image_tag))
             .cmd(vec!["server"])
             .host_config(HostConfig::default()
                 .auto_remove()

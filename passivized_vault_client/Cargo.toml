@@ -30,5 +30,5 @@ passivized_docker_engine_client = "0.0.7"
 passivized_test_support = "0.0.8"
 passivized_vault_client_versions = { version = "0.0.9-alpha", path = "../passivized_vault_client_versions" }
 tempfile = "3.3"
-test-case = "2.2"
+test-case = "3.0"
 tokio = { version = "1.24", features = ["fs", "macros", "rt-multi-thread"] }

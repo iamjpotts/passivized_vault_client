@@ -8,7 +8,7 @@ license = "MPL-2.0"
 name = "passivized_vault_client_versions"
 readme = "../README.md"
 repository = "https://github.com/iamjpotts/passivized_vault_client"
-version = "0.0.9-alpha"
+version = "0.0.9"
 
 [lib]
 proc-macro = true

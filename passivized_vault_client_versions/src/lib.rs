@@ -29,6 +29,7 @@ fn supported() -> Vec<(String, String)> {
     let source = [
         "1.11.6",
         "1.12.2",
+        "1.13.0",
     ];
 
     source

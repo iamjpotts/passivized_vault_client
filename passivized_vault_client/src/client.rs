@@ -401,14 +401,18 @@ impl VaultAuthUserpassApi {
 
     fn is_login_failure(err: &VaultClientError) -> bool {
         if let VaultClientError::FailureResponse(fr_status, VaultClientErrorContent::Errors(messages)) = err {
-            if *fr_status == StatusCode::BAD_REQUEST {
-                return messages
-                    .iter()
-                    .any(|e| e.contains("invalid username or password"));
+            match *fr_status {
+                // Vault version 13 returns 500 Internal Server Error
+                StatusCode::BAD_REQUEST | StatusCode::INTERNAL_SERVER_ERROR =>
+                    messages
+                        .iter()
+                        .any(|e| e.contains("invalid username or password")),
+                _ => false
             }
         }
-
-        false
+        else {
+            false
+        }
     }
 
     pub async fn read<U>(&self, auth_token: &str, username: U) -> Result<VaultAuthUserpassReadResponse, VaultClientError>
@@ -887,6 +891,20 @@ mod test_vault_userpass_api {
             let err = VaultClientError::FailureResponse(
                 MATCHING_STATUS,
                 matching()
+            );
+
+            assert!(VaultAuthUserpassApi::is_login_failure(&err));
+        }
+
+        #[test]
+        fn true_when_match_for_vault_version_13() {
+            let err = VaultClientError::FailureResponse(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                VaultClientErrorContent::Errors(
+                    vec![
+                        "invalid username or password".into()
+                    ]
+                )
             );
 
             assert!(VaultAuthUserpassApi::is_login_failure(&err));

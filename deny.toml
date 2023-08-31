@@ -29,7 +29,12 @@ deny = [
 ]
 multiple-versions = "warn"
 skip = []
-skip-tree = []
+skip-tree = [
+    # Redox is an obscure, Rust-based operating system
+    { name = "redox_syscall" },
+    # simple-logger is on an old version
+    { name = "windows-sys" }
+]
 wildcards = "warn"
 
 [sources]

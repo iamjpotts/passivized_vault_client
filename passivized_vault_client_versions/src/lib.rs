@@ -27,14 +27,15 @@ use quote::{quote, quote_spanned};
 /// Docker images of Vault versions supported by this library, in ascending order.
 fn supported() -> Vec<(String, String)> {
     let source = [
-        "1.11.6",
-        "1.12.2",
-        "1.13.0",
+        "1.11.12",
+        "1.12.10",
+        "1.13.6",
+        "1.14.2",
     ];
 
     source
         .into_iter()
-        .map(|t| ("vault".into(), t.into()))
+        .map(|t| ("hashicorp/vault".into(), t.into()))
         .collect()
 }
 

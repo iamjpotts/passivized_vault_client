@@ -27,8 +27,8 @@ urlencoding = "2.1"
 base64 = "0.21"
 const-str = "0.5"
 passivized_docker_engine_client = "0.0.7"
-passivized_test_support = "0.0.9"
+passivized_test_support = "0.0.10"
 passivized_vault_client_versions = { version = "0.0.10-alpha", path = "../passivized_vault_client_versions" }
 tempfile = "3.3"
-test-case = "3.0"
-tokio = { version = "1.26", features = ["fs", "macros", "rt-multi-thread"] }
+test-case = "3.1"
+tokio = { version = "1.32", features = ["fs", "macros", "rt-multi-thread"] }

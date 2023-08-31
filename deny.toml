@@ -35,7 +35,7 @@ skip-tree = [
     # simple-logger is on an old version
     { name = "windows-sys" }
 ]
-wildcards = "warn"
+wildcards = "deny"
 
 [sources]
 allow-git = []

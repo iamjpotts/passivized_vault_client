@@ -4,9 +4,6 @@
 #[path = "../examples/example_utils/lib.rs"]
 mod example_utils;
 
-#[path = "test_utils/lib.rs"]
-mod test_utils;
-
 use std::path::{Path, PathBuf};
 use http::StatusCode;
 use log::*;
@@ -59,11 +56,8 @@ async fn read_change_own_password_hcl() -> String {
 }
 
 #[test_supported_images]
-fn test_create_and_read_users(image_name: &str, image_tag: &str) {
-    test_utils::run_async(run_test(image_name, image_tag))
-}
-
-async fn run_test(image_name: &str, image_tag: &str) {
+#[tokio::test]
+async fn test_create_and_read_users(image_name: &str, image_tag: &str) {
     use example_utils::container::VaultContainer;
 
     const FN: &str = "test_create_and_read_users";

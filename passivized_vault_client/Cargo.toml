@@ -10,7 +10,7 @@ license = "MPL-2.0"
 name = "passivized_vault_client"
 repository = "https://github.com/iamjpotts/passivized_vault_client"
 rust-version = "1.68"
-version = "0.0.10"
+version = "0.0.11-alpha"
 
 [dependencies]
 http = "0.2"
@@ -28,7 +28,7 @@ base64 = "0.21"
 const-str = "0.5"
 passivized_docker_engine_client = "0.0.8"
 passivized_test_support = "0.0.10"
-passivized_vault_client_versions = { version = "0.0.10", path = "../passivized_vault_client_versions" }
+passivized_vault_client_versions = { version = "0.0.11-alpha", path = "../passivized_vault_client_versions" }
 tempfile = "3.8"
 test-case = "3.1"
 tokio = { version = "1.32", features = ["fs", "macros", "rt-multi-thread"] }

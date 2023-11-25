@@ -31,6 +31,7 @@ fn supported() -> Vec<(String, String)> {
         "1.12.10",
         "1.13.6",
         "1.14.2",
+        "1.15.2",
     ];
 
     source
